@@ -498,9 +498,9 @@ export default function Home() {
             This tool converts natural language questions into safe,
             parameterizable SQL. It only executes SELECT queries and blocks
             destructive operations. If generation fails with a quota error
-            (429), wait a moment or check your OpenAI plan. To enable
+            (429), wait a moment or check your GEMINI plan. To enable
             generation, set the environment variable{" "}
-            <span className="font-mono">OPENAI_API_KEY</span> and restart the
+            <span className="font-mono">GEMINI_API_KEY</span> and restart the
             server.
           </p>
         </section>

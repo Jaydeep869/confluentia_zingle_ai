@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
 import { getSchema, sqliteQuery, ensureSqlite } from "@/lib/db";
-import openai, {
+import {
   generateSQLFromQuestion,
   validateSQL,
   explainSQL,
+  generatePythonFromSQL,
 } from "@/lib/llm";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 export async function POST(req: NextRequest) {
   try {
@@ -61,35 +61,11 @@ export async function POST(req: NextRequest) {
       // Ignore execution failure; still return SQL and Python
     }
 
-    // Try to generate a Python helper script using OpenAI; otherwise fallback to stub
+    // Try to generate a Python helper script using Gemini
     let python = "";
     try {
-      if (process.env.OPENAI_API_KEY) {
-        const messages: ChatCompletionMessageParam[] = [
-          {
-            role: "system",
-            content:
-              "You are a data engineer. Write a concise Python 3 script using sqlite3 and pandas to run the given SQL on local file ai_copilot.db. Include imports and print a short result.",
-          },
-          {
-            role: "user",
-            content: `Table: ${datasetId}\nSQL:\n${gen.sql}`,
-          },
-        ];
-        // @ts-ignore - chat.completions available via SDK
-        const completion = await openai.chat.completions.create({
-          model: "gpt-3.5-turbo",
-          messages,
-          temperature: 0.2,
-          max_tokens: 400,
-        });
-        python = completion.choices?.[0]?.message?.content?.trim() || "";
-        if (python.startsWith("```") && python.endsWith("```")) {
-          python = python
-            .replace(/^```[a-zA-Z]*\n?/, "")
-            .replace(/```\n?$/, "")
-            .trim();
-        }
+      if (process.env.GOOGLE_API_KEY) {
+        python = await generatePythonFromSQL(datasetId, gen.sql);
       }
     } catch (e) {
       // ignored
