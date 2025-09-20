@@ -47,3 +47,15 @@ export async function getSchema(): Promise<any> {
 
   return response.json();
 }
+
+export async function askCsvQuestion(datasetId: string, question: string) {
+  const response = await fetch(`${API_BASE}/csv/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ datasetId, question }),
+  });
+  if (!response.ok) {
+    throw new Error(`API error: ${response.statusText}`);
+  }
+  return response.json();
+}

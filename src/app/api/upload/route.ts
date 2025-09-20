@@ -1,6 +1,7 @@
 // /src/app/api/upload/route.ts
 import { NextRequest } from "next/server";
 import { UploadColumnSummary, UploadResponse } from "@/lib/types";
+import { createTableFromHeaders, bulkInsert } from "@/lib/db";
 
 function detectType(val: string): string {
   if (val === "" || val == null) return "string";
@@ -53,14 +54,40 @@ export async function POST(req: NextRequest) {
       headers.length
     } columns. Top columns: ${headers.slice(0, 3).join(", ")}.`;
 
+    // Import into database table so user can query later
+    const tableName = `csv_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 7)}`;
+    const sanitizedHeaders = await createTableFromHeaders(tableName, headers);
+    // Normalize rows to sanitized headers
+    const normalizedRows = rows.map((r) => {
+      const o: Record<string, any> = {};
+      sanitizedHeaders.forEach((sh, idx) => {
+        const original = headers[idx];
+        o[sh] = r[original] ?? "";
+      });
+      return o;
+    });
+    // Insert in batches
+    const chunkSize = 200;
+    for (let i = 0; i < normalizedRows.length; i += chunkSize) {
+      await bulkInsert(
+        tableName,
+        sanitizedHeaders,
+        normalizedRows.slice(i, i + chunkSize)
+      );
+    }
+
     const resp: UploadResponse = {
-      filename: file.name,
+      filename: (file as File).name,
       rowCount: rows.length,
       columnCount: headers.length,
       columns,
       analysis,
       sampleData: rows.slice(0, Math.min(5, rows.length)),
       timestamp: new Date().toISOString(),
+      datasetId: tableName,
+      tableName,
     };
     return Response.json(resp);
   } catch (err: any) {

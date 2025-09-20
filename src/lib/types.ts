@@ -28,4 +28,16 @@ export interface UploadResponse {
   sampleData: SqlRow[];
   timestamp: string;
   error?: string;
+  datasetId?: string;
+  tableName?: string;
+}
+
+export interface CsvAskResponse {
+  datasetId: string;
+  tableName: string;
+  question: string;
+  sql: string;
+  python?: string;
+  explanation?: string;
+  error?: string;
 }

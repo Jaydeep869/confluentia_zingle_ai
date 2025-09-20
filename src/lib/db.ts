@@ -181,3 +181,65 @@ async function getSchema() {
 }
 
 export { initializeDatabase, query, getSchema };
+
+// Helpers to import CSV into SQLite fallback
+export async function ensureSqlite() {
+  if (!sqliteDb) {
+    sqliteDb = await open({
+      filename: "./ai_copilot.db",
+      driver: sqlite3.Database,
+    });
+  }
+  return sqliteDb;
+}
+
+export async function createTableFromHeaders(
+  tableName: string,
+  headers: string[]
+) {
+  // sanitize column names
+  const cols = headers
+    .map((h) => h.replace(/[^a-zA-Z0-9_]/g, "_"))
+    .map((h) => (h ? h : "col"));
+  const ddl = `CREATE TABLE IF NOT EXISTS ${tableName} (${cols
+    .map((c) => `"${c}" TEXT`)
+    .join(", ")})`;
+  // Always use SQLite for CSV datasets to ensure consistency across routes
+  const db = await ensureSqlite();
+  await db.exec(ddl);
+  return cols;
+}
+
+export async function bulkInsert(
+  tableName: string,
+  headers: string[],
+  rows: any[]
+) {
+  const cols = headers
+    .map((h) => h.replace(/[^a-zA-Z0-9_]/g, "_"))
+    .map((h) => (h ? h : "col"));
+  const db = await ensureSqlite();
+  const stmt = await db.prepare(
+    `INSERT INTO ${tableName} (${cols
+      .map((c) => `"${c}"`)
+      .join(",")}) VALUES (${cols.map(() => "?").join(",")})`
+  );
+  try {
+    await db.exec("BEGIN");
+    for (const r of rows) {
+      await stmt.run(...cols.map((c) => r[c] ?? r[c] ?? ""));
+    }
+    await db.exec("COMMIT");
+  } catch (e) {
+    await db.exec("ROLLBACK");
+    throw e;
+  } finally {
+    await stmt.finalize();
+  }
+}
+
+// Direct SQLite query helper for CSV datasets
+export async function sqliteQuery(sql: string, params: any[] = []) {
+  const db = await ensureSqlite();
+  return db.all(sql, params);
+}
