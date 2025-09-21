@@ -4,6 +4,12 @@ import sqlite3 from "sqlite3";
 import { open, Database } from "sqlite";
 import { SqlRow } from "./types";
 
+// In serverless environments (e.g., Vercel), only /tmp is writable.
+// Use a configurable SQLITE_FILE env var or fall back to /tmp in prod, local file in dev.
+export const SQLITE_FILE_PATH =
+  process.env.SQLITE_FILE ||
+  (process.env.NODE_ENV === "production" ? "/tmp/ai_copilot.db" : "./ai_copilot.db");
+
 // ---------------------
 // PostgreSQL (Neon) setup
 // ---------------------
@@ -27,7 +33,7 @@ export async function ensureSqlite(): Promise<
 > {
   if (!sqliteDb) {
     sqliteDb = await open({
-      filename: "./ai_copilot.db",
+      filename: SQLITE_FILE_PATH,
       driver: sqlite3.Database,
     });
   }
@@ -127,7 +133,6 @@ export async function query(sql: string, params: unknown[] = []) {
     return result.rows;
   } catch (error) {
     console.log("PostgreSQL query failed, using SQLite...");
-
     const db = await ensureSqlite();
     try {
       return db.all(sql, params);
