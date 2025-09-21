@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSchema, sqliteQuery, ensureSqlite } from "@/lib/db";
 import {
   generateSQLFromQuestion,
@@ -7,70 +7,90 @@ import {
   generatePythonFromSQL,
 } from "@/lib/llm";
 
+interface CsvAskRequestBody {
+  datasetId: string;
+  question: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { datasetId, question } = await req.json();
+    const body: CsvAskRequestBody = await req.json();
+    const { datasetId, question } = body;
+
     if (!datasetId || !question) {
-      return Response.json(
+      return NextResponse.json(
         { error: "datasetId and question are required" },
         { status: 400 }
       );
     }
 
-    // Ensure SQLite is available and build a targeted schema for the dataset table
+    // Ensure SQLite is ready
     await ensureSqlite();
-    type SchemaColumn = { table_name: string; column_name: string; data_type: string; is_nullable: string }
-  const schemaUnknown: unknown = await getSchema();
-    let schema: SchemaColumn[] = Array.isArray(schemaUnknown) ? (schemaUnknown as SchemaColumn[]) : [];
-    if (schema.length) {
-      const narrowed = schema.filter((c) => c.table_name === datasetId);
-      schema = narrowed;
-      // If schema is empty (new table), try PRAGMA to fetch columns
-      if (!narrowed.length) {
-        try {
-          const cols: Array<{ name: string; type: string; notnull: number }> = await sqliteQuery(`PRAGMA table_info(${datasetId})`);
-          schema = cols.map((c) => ({
-            table_name: datasetId,
-            column_name: c.name,
-            data_type: c.type || "TEXT",
-            is_nullable: c.notnull === 0 ? "YES" : "NO",
-          }));
-        } catch {/* ignore pragma failure */}
+
+    type SchemaColumn = {
+      table_name: string;
+      column_name: string;
+      data_type: string;
+      is_nullable: string;
+    };
+
+    const schemaUnknown: unknown = await getSchema();
+    let schema: SchemaColumn[] = Array.isArray(schemaUnknown)
+      ? (schemaUnknown as SchemaColumn[])
+      : [];
+
+    // Filter schema for this dataset
+    schema = schema.filter((c) => c.table_name === datasetId);
+
+    // If schema empty, fallback to PRAGMA
+    if (!schema.length) {
+      try {
+        const cols: Array<{ name: string; type: string; notnull: number }> =
+          await sqliteQuery(`PRAGMA table_info(${datasetId})`);
+        schema = cols.map((c) => ({
+          table_name: datasetId,
+          column_name: c.name,
+          data_type: c.type || "TEXT",
+          is_nullable: c.notnull === 0 ? "YES" : "NO",
+        }));
+      } catch {
+        // ignore pragma failure
       }
     }
 
     const gen = await generateSQLFromQuestion(question, schema, "sqlite");
+
     if (!gen.sql) {
-      return Response.json(
+      return NextResponse.json(
         { error: gen.error || "Failed to generate SQL" },
         { status: 200 }
       );
     }
 
-    // Validate SQL for safety
+    // Validate SQL
     const safety = validateSQL(gen.sql);
     if (!safety.valid) {
-      return Response.json(
+      return NextResponse.json(
         { error: safety.error, sql: gen.sql },
         { status: 200 }
       );
     }
 
-    // Try execution
-  let rows: Array<Record<string, unknown>> = [];
+    // Execute SQL safely
+    let rows: Array<Record<string, unknown>> = [];
     try {
       rows = await sqliteQuery(gen.sql);
-  } catch (e: unknown) {
-      // Ignore execution failure; still return SQL and Python
+    } catch {
+      // execution failure ignored
     }
 
-    // Try to generate a Python helper script using Gemini
+    // Generate Python script
     let python = "";
     try {
       if (process.env.GOOGLE_API_KEY) {
         python = await generatePythonFromSQL(datasetId, gen.sql);
       }
-  } catch {
+    } catch {
       // ignored
     }
 
@@ -88,7 +108,7 @@ export async function POST(req: NextRequest) {
       ].join("\n");
     }
 
-    return Response.json({
+    return NextResponse.json({
       datasetId,
       tableName: datasetId,
       question,
@@ -98,16 +118,13 @@ export async function POST(req: NextRequest) {
       preview: rows.slice(0, 5),
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'CSV ask failed';
-    return Response.json(
-      { error: message },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "CSV ask failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function OPTIONS() {
-  return new Response(null, {
+  return new NextResponse(null, {
     status: 200,
     headers: {
       "Access-Control-Allow-Origin": "*",

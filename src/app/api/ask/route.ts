@@ -1,5 +1,4 @@
-// /src/app/api/ask/route.ts
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   initializeDatabase,
   getSchema as getDbSchema,
@@ -14,19 +13,27 @@ async function ensureDb() {
   }
 }
 
+interface AskRequestBody {
+  question: string;
+  generateOnly?: boolean;
+}
+
 export async function POST(req: NextRequest) {
   try {
     await ensureDb();
-    const { question, generateOnly = false } = await req.json();
+    const body: AskRequestBody = await req.json();
+    const { question, generateOnly = false } = body;
+
     if (!question || typeof question !== "string") {
-      return Response.json({ error: "Question is required" }, { status: 400 });
+      return NextResponse.json({ error: "Question is required" }, { status: 400 });
     }
 
-  const schemaRaw = await getDbSchema();
-  const schema: SchemaColumn[] = Array.isArray(schemaRaw) ? (schemaRaw as SchemaColumn[]) : [];
-  const gen = await generateSQLFromQuestion(question, schema, "postgresql");
+    const schemaRaw = await getDbSchema();
+    const schema: SchemaColumn[] = Array.isArray(schemaRaw) ? (schemaRaw as SchemaColumn[]) : [];
+    const gen = await generateSQLFromQuestion(question, schema, "postgresql");
+
     if (gen.error || !gen.sql) {
-      return Response.json(
+      return NextResponse.json(
         {
           question,
           sql: "",
@@ -40,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     if (generateOnly) {
       const explanation = gen.explanation || (await explainSQL(gen.sql));
-      return Response.json({
+      return NextResponse.json({
         question,
         sql: gen.sql,
         explanation,
@@ -51,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     const safety = validateSQL(gen.sql);
     if (!safety.valid) {
-      return Response.json(
+      return NextResponse.json(
         {
           question,
           sql: gen.sql,
@@ -65,7 +72,8 @@ export async function POST(req: NextRequest) {
 
     const rows = await dbQuery(gen.sql);
     const explanation = gen.explanation || (await explainSQL(gen.sql));
-    return Response.json({
+
+    return NextResponse.json({
       question,
       sql: gen.sql,
       explanation,
@@ -75,16 +83,13 @@ export async function POST(req: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal error';
-    return Response.json(
-      { error: message },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
 export async function OPTIONS() {
-  return new Response(null, {
+  return new NextResponse(null, {
     status: 200,
     headers: {
       "Access-Control-Allow-Origin": "*",

@@ -23,44 +23,70 @@ const CsvPage = () => {
 
     // File upload handler
     const handleFileUpload = async () => {
-        if (!file) return;
-        setLoading(true);
-        setUploadResponse(null);
-        try {
-            const result = await uploadFile(file);
-            setUploadResponse(result);
-        } catch (error) {
-            console.error("Error uploading file:", error);
-            setUploadResponse({
-                filename: file.name,
-                rowCount: 0,
-                columnCount: 0,
-                columns: [],
-                analysis: "Failed to analyze file. Please try again.",
-                sampleData: [],
-                error: error instanceof Error ? error.message : "Unknown error",
-                timestamp: new Date().toISOString(),
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
+    if (!file) return;
+    setLoading(true);
+    setUploadResponse(null);
+
+    try {
+        const csvText = await file.text(); // <-- read file as text
+        const res = await fetch("/api/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: file.name, content: csvText }),
+        });
+        const result: UploadResponse = await res.json();
+        setUploadResponse(result);
+    } catch (error) {
+        console.error("Error uploading file:", error);
+        setUploadResponse({
+            filename: file.name,
+            rowCount: 0,
+            columnCount: 0,
+            columns: [],
+            analysis: "Failed to analyze file. Please try again.",
+            sampleData: [],
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: new Date().toISOString(),
+        });
+    } finally {
+        setLoading(false);
+    }
+};
 
     // CSV question handler
     const handleCsvAsk = async () => {
-        if (!uploadResponse?.datasetId || !csvQuestion.trim()) return;
-        setCsvLoading(true);
-        setCsvAnswer(null);
-        try {
-            const result = await askCsvQuestion(uploadResponse.datasetId, csvQuestion);
-            setCsvAnswer(result);
-        } catch (e: unknown) {
-            const message = e instanceof Error ? e.message : 'Failed to ask dataset question';
-            setCsvAnswer({ error: message });
-        } finally {
-            setCsvLoading(false);
-        }
-    };
+  if (!uploadResponse?.datasetId || !csvQuestion.trim()) return;
+
+  setCsvLoading(true);
+  setCsvAnswer(null);
+
+  try {
+    const res = await fetch("/api/ask-csv", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        datasetId: uploadResponse.datasetId,
+        question: csvQuestion,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setCsvAnswer({ error: data.error || "Failed to get answer" });
+      return;
+    }
+
+    setCsvAnswer(data); // data contains sql, python, preview, etc.
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to ask dataset question";
+    setCsvAnswer({ error: message });
+  } finally {
+    setCsvLoading(false);
+  }
+};
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
