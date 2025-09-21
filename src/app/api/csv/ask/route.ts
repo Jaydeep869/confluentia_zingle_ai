@@ -1,3 +1,4 @@
+// /src/app/api/ask-csv/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSchema, sqliteQuery, ensureSqlite } from "@/lib/db";
 import {
@@ -7,20 +8,19 @@ import {
   generatePythonFromSQL,
 } from "@/lib/llm";
 
-const FIXED_TABLE = "uploaded_csv";
-
 interface CsvAskRequestBody {
+  datasetId: string; // <-- dynamic table name
   question: string;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body: CsvAskRequestBody = await req.json();
-    const { question } = body;
+    const { datasetId, question } = body;
 
-    if (!question) {
+    if (!datasetId || !question) {
       return NextResponse.json(
-        { error: "Question is required" },
+        { error: "datasetId and question are required" },
         { status: 400 }
       );
     }
@@ -40,16 +40,16 @@ export async function POST(req: NextRequest) {
       ? (schemaUnknown as SchemaColumn[])
       : [];
 
-    // Filter schema for fixed table
-    schema = schema.filter((c) => c.table_name === FIXED_TABLE);
+    // Filter schema for this dataset/table
+    schema = schema.filter((c) => c.table_name === datasetId);
 
     // If schema empty, fallback to PRAGMA
     if (!schema.length) {
       try {
         const cols: Array<{ name: string; type: string; notnull: number }> =
-          await sqliteQuery(`PRAGMA table_info(${FIXED_TABLE})`);
+          await sqliteQuery(`PRAGMA table_info(${datasetId})`);
         schema = cols.map((c) => ({
-          table_name: FIXED_TABLE,
+          table_name: datasetId,
           column_name: c.name,
           data_type: c.type || "TEXT",
           is_nullable: c.notnull === 0 ? "YES" : "NO",
@@ -84,15 +84,18 @@ export async function POST(req: NextRequest) {
     let rows: Array<Record<string, unknown>> = [];
     try {
       rows = await sqliteQuery(gen.sql);
-    } catch {
-      // execution failure ignored
+    } catch (err) {
+      return NextResponse.json(
+        { error: "SQL execution failed: " + (err instanceof Error ? err.message : err) },
+        { status: 200 }
+      );
     }
 
     // Generate Python script
     let python = "";
     try {
       if (process.env.GOOGLE_API_KEY) {
-        python = await generatePythonFromSQL(FIXED_TABLE, gen.sql);
+        python = await generatePythonFromSQL(datasetId, gen.sql);
       }
     } catch {
       // ignored
@@ -113,7 +116,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      tableName: FIXED_TABLE,
+      tableName: datasetId,
       question,
       sql: gen.sql,
       python,

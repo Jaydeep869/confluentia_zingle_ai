@@ -1,9 +1,15 @@
+// /src/lib/db.ts
 import { Pool } from "pg";
+import sqlite3 from "sqlite3";
+import { open, Database } from "sqlite";
+import { SqlRow } from "./types";
 
-// Parse your Neon.tech connection URL
+// ---------------------
+// PostgreSQL (Neon) setup
+// ---------------------
 const connectionString =
   process.env.DB_URL || "postgresql://localhost:5432/postgres";
-// Database connection configuration for Neon.tech
+
 const pool = new Pool({
   connectionString,
   ssl: {
@@ -11,24 +17,37 @@ const pool = new Pool({
   },
 });
 
-// For demo purposes, we'll also set up a simple SQLite database as a fallback
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
+// ---------------------
+// SQLite fallback
+// ---------------------
+let sqliteDb: Database<sqlite3.Database, sqlite3.Statement> | null = null;
 
-let sqliteDb: import("sqlite").Database | null = null;
+export async function ensureSqlite(): Promise<
+  Database<sqlite3.Database, sqlite3.Statement>
+> {
+  if (!sqliteDb) {
+    sqliteDb = await open({
+      filename: "./ai_copilot.db",
+      driver: sqlite3.Database,
+    });
+  }
+  return sqliteDb;
+}
 
-// Initialize the database
-async function initializeDatabase() {
+// ---------------------
+// Initialize DB
+// ---------------------
+export async function initializeDatabase(): Promise<boolean> {
   try {
-    // Try to connect to Neon PostgreSQL first
+    // Try PostgreSQL first
     await pool.query("SELECT NOW()");
     console.log("Connected to Neon PostgreSQL database");
 
-    // Check if we have the sample table, create if not
+    // Ensure sample table exists
     const tableCheck = await pool.query(`
       SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
         AND table_name = 'sample_data'
       )
     `);
@@ -44,9 +63,8 @@ async function initializeDatabase() {
         )
       `);
 
-      // Insert some sample data
       await pool.query(`
-        INSERT INTO sample_data (name, value, category) VALUES 
+        INSERT INTO sample_data (name, value, category) VALUES
         ('Item 1', 100, 'A'),
         ('Item 2', 200, 'B'),
         ('Item 3', 150, 'A'),
@@ -59,17 +77,12 @@ async function initializeDatabase() {
 
     return true;
   } catch (error) {
-    console.log("Neon PostgreSQL connection failed, trying SQLite...", error);
+    console.log("Neon PostgreSQL connection failed, using SQLite...", error);
 
-    // Fallback to SQLite for demo purposes
     try {
-      sqliteDb = await open({
-        filename: "./ai_copilot.db",
-        driver: sqlite3.Database,
-      });
+      const db = await ensureSqlite();
 
-      // Create a sample table if it doesn't exist
-      await sqliteDb.exec(`
+      await db.exec(`
         CREATE TABLE IF NOT EXISTS sample_data (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT,
@@ -79,13 +92,12 @@ async function initializeDatabase() {
         )
       `);
 
-      // Insert some sample data
-      const sampleCount = await sqliteDb.get(
+      const sampleCount = await db.get<{ count: number }>(
         "SELECT COUNT(*) as count FROM sample_data"
       );
-      if (sampleCount.count === 0) {
-        await sqliteDb.exec(`
-          INSERT INTO sample_data (name, value, category) VALUES 
+      if (!sampleCount || sampleCount.count === 0) {
+        await db.exec(`
+          INSERT INTO sample_data (name, value, category) VALUES
           ('Item 1', 100, 'A'),
           ('Item 2', 200, 'B'),
           ('Item 3', 150, 'A'),
@@ -106,112 +118,88 @@ async function initializeDatabase() {
   }
 }
 
-// Query function that works with either database
-async function query(sql: string, params: unknown[] = []) {
+// ---------------------
+// Unified query function
+// ---------------------
+export async function query(sql: string, params: unknown[] = []) {
   try {
-    // Try PostgreSQL first
     const result = await pool.query(sql, params);
     return result.rows;
   } catch (error) {
-    console.log("PostgreSQL query failed, trying SQLite...");
+    console.log("PostgreSQL query failed, using SQLite...");
 
-    // Fallback to SQLite
-    if (sqliteDb) {
-      try {
-        const result = await sqliteDb.all(sql, params);
-        return result;
-      } catch (sqliteError) {
-        console.error("SQLite query failed:", sqliteError);
-        throw new Error(`Database query failed: ${sqliteError}`);
-      }
-    } else {
-      throw new Error("No database connection available");
+    const db = await ensureSqlite();
+    try {
+      return db.all(sql, params);
+    } catch (sqliteError) {
+      console.error("SQLite query failed:", sqliteError);
+      throw new Error(`Database query failed: ${sqliteError}`);
     }
   }
 }
 
-// Get database schema information
-interface SchemaColumn { table_name: string; column_name: string; data_type: string; is_nullable: string }
-async function getSchema(): Promise<SchemaColumn[]> {
+// ---------------------
+// Get DB schema
+// ---------------------
+export interface SchemaColumn {
+  table_name: string;
+  column_name: string;
+  data_type: string;
+  is_nullable: string;
+}
+
+export async function getSchema(): Promise<SchemaColumn[]> {
   try {
-    // Try PostgreSQL schema query
-    const tablesQuery = `
+    const result = await pool.query(`
       SELECT table_name, column_name, data_type, is_nullable
       FROM information_schema.columns
       WHERE table_schema = 'public'
       ORDER BY table_name, ordinal_position
-    `;
-    const result = await pool.query(tablesQuery);
+    `);
     return result.rows;
-  } catch (error) {
-    console.log("PostgreSQL schema query failed, trying SQLite...");
+  } catch {
+    // Fallback to SQLite
+    const db = await ensureSqlite();
+    const tables: Array<{ table_name: string }> = await db.all(
+      "SELECT name as table_name FROM sqlite_master WHERE type='table'"
+    );
 
-    // Fallback to SQLite schema query
-    if (sqliteDb) {
-      try {
-        const tablesQuery = `
-          SELECT name as table_name
-          FROM sqlite_master
-          WHERE type='table'
-        `;
-        const tables = await sqliteDb.all(tablesQuery);
-
-  const schema: SchemaColumn[] = [];
-        for (const table of tables) {
-          const tableInfo = await sqliteDb.all(
-            `PRAGMA table_info(${table.table_name})`
-          );
-          for (const column of tableInfo) {
-            schema.push({
-              table_name: table.table_name,
-              column_name: column.name,
-              data_type: column.type,
-              is_nullable: column.notnull === 0 ? "YES" : "NO",
-            });
-          }
-        }
-        return schema;
-      } catch (sqliteError) {
-        console.error("SQLite schema query failed:", sqliteError);
-        throw new Error(`Schema query failed: ${sqliteError}`);
+    const schema: SchemaColumn[] = [];
+    for (const table of tables) {
+      const cols = await db.all(
+        `PRAGMA table_info(${table.table_name})`
+      );
+      for (const col of cols) {
+        schema.push({
+          table_name: table.table_name,
+          column_name: col.name,
+          data_type: col.type,
+          is_nullable: col.notnull === 0 ? "YES" : "NO",
+        });
       }
-    } else {
-      throw new Error("No database connection available");
     }
+    return schema;
   }
 }
 
-export { initializeDatabase, query, getSchema };
-
-// Helpers to import CSV into SQLite fallback
-export async function ensureSqlite() {
-  if (!sqliteDb) {
-    sqliteDb = await open({
-      filename: "./ai_copilot.db",
-      driver: sqlite3.Database,
-    });
-  }
-  return sqliteDb;
-}
-
+// ---------------------
+// CSV helpers (SQLite only)
+// ---------------------
 export async function createTableFromHeaders(
   tableName: string,
   headers: string[]
 ) {
-  // sanitize column names
   const cols = headers
     .map((h) => h.replace(/[^a-zA-Z0-9_]/g, "_"))
     .map((h) => (h ? h : "col"));
   const ddl = `CREATE TABLE IF NOT EXISTS ${tableName} (${cols
     .map((c) => `"${c}" TEXT`)
     .join(", ")})`;
-  // Always use SQLite for CSV datasets to ensure consistency across routes
   const db = await ensureSqlite();
   await db.exec(ddl);
   return cols;
 }
 
-import { SqlRow } from './types';
 export async function bulkInsert(
   tableName: string,
   headers: string[],
@@ -222,14 +210,14 @@ export async function bulkInsert(
     .map((h) => (h ? h : "col"));
   const db = await ensureSqlite();
   const stmt = await db.prepare(
-    `INSERT INTO ${tableName} (${cols
-      .map((c) => `"${c}"`)
-      .join(",")}) VALUES (${cols.map(() => "?").join(",")})`
+    `INSERT INTO ${tableName} (${cols.map((c) => `"${c}"`).join(",")}) VALUES (${cols
+      .map(() => "?")
+      .join(",")})`
   );
   try {
     await db.exec("BEGIN");
     for (const r of rows) {
-      await stmt.run(...cols.map((c) => r[c] ?? r[c] ?? ""));
+      await stmt.run(...cols.map((c) => r[c] ?? ""));
     }
     await db.exec("COMMIT");
   } catch (e) {
@@ -240,7 +228,6 @@ export async function bulkInsert(
   }
 }
 
-// Direct SQLite query helper for CSV datasets
 export async function sqliteQuery(sql: string, params: unknown[] = []) {
   const db = await ensureSqlite();
   return db.all(sql, params);

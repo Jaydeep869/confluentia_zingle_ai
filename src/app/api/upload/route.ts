@@ -1,7 +1,6 @@
-// /src/app/api/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { createTableFromHeaders, bulkInsert, sqliteQuery } from "@/lib/db";
 import { UploadColumnSummary, UploadResponse, SqlRow } from "@/lib/types";
-import { createTableFromHeaders, bulkInsert } from "@/lib/db";
 
 function detectType(val: string): string {
   if (val === "" || val == null) return "string";
@@ -19,16 +18,12 @@ interface UploadRequestBody {
 export async function POST(req: NextRequest) {
   try {
     const body: UploadRequestBody = await req.json();
-
     const { filename, content } = body;
-    if (!content) {
-      return NextResponse.json({ error: "No CSV content provided" }, { status: 400 });
-    }
+
+    if (!content) return NextResponse.json({ error: "No CSV content provided" }, { status: 400 });
 
     const lines = content.split(/\r?\n/).filter(Boolean);
-    if (lines.length === 0) {
-      return NextResponse.json({ error: "Empty CSV" }, { status: 400 });
-    }
+    if (!lines.length) return NextResponse.json({ error: "Empty CSV" }, { status: 400 });
 
     const headers = lines[0].split(",").map((h) => h.trim());
     const rows: SqlRow[] = lines.slice(1).map((line) => {
@@ -36,9 +31,9 @@ export async function POST(req: NextRequest) {
       const obj: SqlRow = {};
       headers.forEach((h, i) => (obj[h] = parts[i] ?? ""));
       return obj;
-    });
+    })
 
-    // Infer column info
+    // Infer column types and sample values
     const columns: UploadColumnSummary[] = headers.map((h) => {
       const samples = rows.slice(0, 5).map((r) => String(r[h] ?? ""));
       const types = samples.map(detectType);
@@ -54,15 +49,13 @@ export async function POST(req: NextRequest) {
       return { name: h, type, sampleValues: samples };
     });
 
-    const analysis = `Detected ${rows.length} rows and ${headers.length} columns. Top columns: ${headers
-      .slice(0, 3)
-      .join(", ")}.`;
+    const analysis = `Detected ${rows.length} rows and ${headers.length} columns. Top columns: ${headers.slice(0, 3).join(", ")}.`;
 
-    // Import into DB (optional)
+    // Create table in SQLite
     const tableName = `csv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
     const sanitizedHeaders = await createTableFromHeaders(tableName, headers);
 
-    // Normalize rows
+    // Normalize rows to sanitized headers
     const normalizedRows: SqlRow[] = rows.map((r) => {
       const o: SqlRow = {};
       sanitizedHeaders.forEach((sh, idx) => {
@@ -72,7 +65,7 @@ export async function POST(req: NextRequest) {
       return o;
     });
 
-    // Insert in batches
+    // Insert rows in batches
     const chunkSize = 200;
     for (let i = 0; i < normalizedRows.length; i += chunkSize) {
       await bulkInsert(tableName, sanitizedHeaders, normalizedRows.slice(i, i + chunkSize));

@@ -1,89 +1,80 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  initializeDatabase,
-  getSchema as getDbSchema,
-  query as dbQuery,
-} from "@/lib/db";
-import { generateSQLFromQuestion, validateSQL, explainSQL, SchemaColumn } from "@/lib/llm";
+import { getSchema, sqliteQuery, ensureSqlite } from "@/lib/db";
+import { generateSQLFromQuestion, validateSQL, explainSQL, generatePythonFromSQL } from "@/lib/llm";
 
-let dbInitialized = false;
-async function ensureDb() {
-  if (!dbInitialized) {
-    dbInitialized = await initializeDatabase();
-  }
-}
+const FIXED_TABLE = "uploaded_csv";
 
-interface AskRequestBody {
+interface CsvAskRequestBody {
   question: string;
-  generateOnly?: boolean;
 }
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureDb();
-    const body: AskRequestBody = await req.json();
-    const { question, generateOnly = false } = body;
+    const body: CsvAskRequestBody = await req.json();
+    const { question } = body;
 
-    if (!question || typeof question !== "string") {
-      return NextResponse.json({ error: "Question is required" }, { status: 400 });
+    if (!question) return NextResponse.json({ error: "Question is required" }, { status: 400 });
+
+    // Ensure SQLite is ready
+    await ensureSqlite();
+
+    type SchemaColumn = { table_name: string; column_name: string; data_type: string; is_nullable: string };
+    let schema: SchemaColumn[] = (await getSchema()).filter(c => c.table_name === FIXED_TABLE);
+
+    if (!schema.length) {
+      // fallback to PRAGMA
+      try {
+        const cols: Array<{ name: string; type: string; notnull: number }> = await sqliteQuery(`PRAGMA table_info(${FIXED_TABLE})`);
+        schema = cols.map(c => ({
+          table_name: FIXED_TABLE,
+          column_name: c.name,
+          data_type: c.type || "TEXT",
+          is_nullable: c.notnull === 0 ? "YES" : "NO",
+        }));
+      } catch {
+        return NextResponse.json({ error: "No dataset found. Please upload a CSV first." }, { status: 400 });
+      }
     }
 
-    const schemaRaw = await getDbSchema();
-    const schema: SchemaColumn[] = Array.isArray(schemaRaw) ? (schemaRaw as SchemaColumn[]) : [];
-    const gen = await generateSQLFromQuestion(question, schema, "postgresql");
+    const gen = await generateSQLFromQuestion(question, schema, "sqlite");
 
-    if (gen.error || !gen.sql) {
-      return NextResponse.json(
-        {
-          question,
-          sql: "",
-          explanation: gen.explanation,
-          executed: false,
-          error: gen.error,
-        },
-        { status: 200 }
-      );
-    }
-
-    if (generateOnly) {
-      const explanation = gen.explanation || (await explainSQL(gen.sql));
-      return NextResponse.json({
-        question,
-        sql: gen.sql,
-        explanation,
-        executed: false,
-        timestamp: new Date().toISOString(),
-      });
-    }
+    if (!gen.sql) return NextResponse.json({ error: gen.error || "Failed to generate SQL" }, { status: 200 });
 
     const safety = validateSQL(gen.sql);
-    if (!safety.valid) {
-      return NextResponse.json(
-        {
-          question,
-          sql: gen.sql,
-          explanation: gen.explanation,
-          executed: false,
-          error: safety.error,
-        },
-        { status: 200 }
-      );
+    if (!safety.valid) return NextResponse.json({ error: safety.error, sql: gen.sql }, { status: 200 });
+
+    let rows: Array<Record<string, unknown>> = [];
+    try { rows = await sqliteQuery(gen.sql); } catch { /* ignore */ }
+
+    let python = "";
+    try {
+      python = process.env.GOOGLE_API_KEY ? await generatePythonFromSQL(FIXED_TABLE, gen.sql) : "";
+    } catch { /* ignore */ }
+
+    if (!python) {
+      python = [
+        "# Auto-generated Python script",
+        "import sqlite3",
+        "import pandas as pd",
+        "",
+        "conn = sqlite3.connect('ai_copilot.db')",
+        `sql = """${gen.sql.replace(/"""/g, '"""')}"""`,
+        "df = pd.read_sql_query(sql, conn)",
+        "print(df.head(10))",
+        "",
+      ].join("\n");
     }
 
-    const rows = await dbQuery(gen.sql);
-    const explanation = gen.explanation || (await explainSQL(gen.sql));
-
     return NextResponse.json({
+      tableName: FIXED_TABLE,
       question,
       sql: gen.sql,
-      explanation,
-      executed: true,
-      result: rows,
-      rowCount: rows.length,
-      timestamp: new Date().toISOString(),
+      python,
+      explanation: gen.explanation || (await explainSQL(gen.sql)),
+      preview: rows.slice(0, 5),
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal error";
+    const message = err instanceof Error ? err.message : "CSV ask failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
