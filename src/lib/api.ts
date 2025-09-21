@@ -1,5 +1,5 @@
 // /src/lib/api.ts
-import { SQLResponse, UploadResponse } from "./types";
+import { SQLResponse, UploadResponse, CsvAskResponse } from "./types";
 
 const API_BASE = "/api";
 
@@ -38,17 +38,18 @@ export async function uploadFile(file: File): Promise<UploadResponse> {
   return response.json();
 }
 
-export async function getSchema(): Promise<any> {
+export interface SchemaSummary { schema: unknown; tableCount: number; columnCount: number; timestamp: string; error?: string }
+export async function getSchema(): Promise<SchemaSummary> {
   const response = await fetch(`${API_BASE}/schema`);
 
   if (!response.ok) {
     throw new Error(`API error: ${response.statusText}`);
   }
 
-  return response.json();
+  return response.json() as Promise<SchemaSummary>;
 }
 
-export async function askCsvQuestion(datasetId: string, question: string) {
+export async function askCsvQuestion(datasetId: string, question: string): Promise<CsvAskResponse> {
   const response = await fetch(`${API_BASE}/csv/ask`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -57,5 +58,5 @@ export async function askCsvQuestion(datasetId: string, question: string) {
   if (!response.ok) {
     throw new Error(`API error: ${response.statusText}`);
   }
-  return response.json();
+  return response.json() as Promise<CsvAskResponse>;
 }

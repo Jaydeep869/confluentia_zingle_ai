@@ -18,15 +18,21 @@ export async function GET() {
         { status: 500 }
       );
     }
+    const tableNames = Array.isArray(schema)
+      ? schema
+          .map((c) => (c && typeof c === 'object' && 'table_name' in c ? (c as { table_name?: unknown }).table_name : undefined))
+          .filter((t): t is string => typeof t === 'string')
+      : [];
     return Response.json({
       schema,
-      tableCount: new Set(schema.map((c: any) => c.table_name)).size,
-      columnCount: schema.length,
+      tableCount: new Set(tableNames).size,
+      columnCount: Array.isArray(schema) ? schema.length : 0,
       timestamp: new Date().toISOString(),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to retrieve schema';
     return Response.json(
-      { error: err?.message || "Failed to retrieve schema" },
+      { error: message },
       { status: 500 }
     );
   }

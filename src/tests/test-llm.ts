@@ -1,8 +1,8 @@
 // /src/tests/test-llm.ts
-const { generateSQLFromQuestion, validateSQL, explainSQL } = require('../lib/llm');
+import { generateSQLFromQuestion, validateSQL, explainSQL, SchemaColumn } from "../lib/llm";
 
 // Mock schema data for testing
-const mockSchema = [
+const mockSchema: SchemaColumn[] = [
   { table_name: 'users', column_name: 'id', data_type: 'integer', is_nullable: 'NO' },
   { table_name: 'users', column_name: 'name', data_type: 'text', is_nullable: 'YES' },
   { table_name: 'users', column_name: 'email', data_type: 'text', is_nullable: 'YES' },
@@ -13,7 +13,7 @@ const mockSchema = [
   { table_name: 'orders', column_name: 'status', data_type: 'text', is_nullable: 'YES' },
 ];
 
-async function testLLM() {
+async function testLLM(): Promise<void> {
   console.log('Testing LLM integration...');
   
   // Test SQL generation
@@ -39,7 +39,7 @@ async function testLLM() {
       const explanation = await explainSQL(result.sql);
       console.log('SQL Explanation:', explanation);
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error testing LLM:', error);
   }
 }

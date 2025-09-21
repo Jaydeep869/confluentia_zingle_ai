@@ -18,12 +18,13 @@ export default function Home() {
 
   // New state for CSV Q&A
   const [csvQuestion, setCsvQuestion] = useState("");
+  interface CsvPreviewRow { [key: string]: unknown }
   const [csvAnswer, setCsvAnswer] = useState<{
     sql?: string;
     python?: string;
     explanation?: string;
     error?: string;
-    preview?: any[];
+    preview?: CsvPreviewRow[];
   } | null>(null);
   const [csvLoading, setCsvLoading] = useState(false);
 
@@ -89,8 +90,9 @@ export default function Home() {
         csvQuestion
       );
       setCsvAnswer(result);
-    } catch (e: any) {
-      setCsvAnswer({ error: e?.message || "Failed to ask dataset question" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to ask dataset question';
+      setCsvAnswer({ error: message });
     } finally {
       setCsvLoading(false);
     }
@@ -239,8 +241,8 @@ export default function Home() {
                               .slice(0, 5)
                               .map((row, index) => (
                                 <tr key={index}>
-                                  {Object.values(row).map(
-                                    (value: any, i) => (
+                                    {Object.values(row).map(
+                                    (value: unknown, i) => (
                                       <td
                                         key={i}
                                         className="px-4 py-2 border-b border-white/10 text-zinc-200"
@@ -421,7 +423,7 @@ export default function Home() {
                                       {csvAnswer.preview.map((row, i) => (
                                         <tr key={i}>
                                           {Object.values(row).map(
-                                            (val: any, j) => (
+                                            (val: unknown, j) => (
                                               <td
                                                 key={j}
                                                 className="px-3 py-2 border-b border-white/10 text-sm text-zinc-200"
@@ -473,7 +475,7 @@ export default function Home() {
                           <tbody>
                             {uploadResponse.sampleData.map((row, index) => (
                               <tr key={index}>
-                                {Object.values(row).map((value: any, i) => (
+                                {Object.values(row).map((value: unknown, i) => (
                                   <td
                                     key={i}
                                     className="px-3 py-2 border-b border-white/10 text-sm text-zinc-200"

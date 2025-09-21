@@ -15,7 +15,7 @@ const pool = new Pool({
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 
-let sqliteDb: any = null;
+let sqliteDb: import("sqlite").Database | null = null;
 
 // Initialize the database
 async function initializeDatabase() {
@@ -107,7 +107,7 @@ async function initializeDatabase() {
 }
 
 // Query function that works with either database
-async function query(sql: string, params: any[] = []) {
+async function query(sql: string, params: unknown[] = []) {
   try {
     // Try PostgreSQL first
     const result = await pool.query(sql, params);
@@ -131,7 +131,8 @@ async function query(sql: string, params: any[] = []) {
 }
 
 // Get database schema information
-async function getSchema() {
+interface SchemaColumn { table_name: string; column_name: string; data_type: string; is_nullable: string }
+async function getSchema(): Promise<SchemaColumn[]> {
   try {
     // Try PostgreSQL schema query
     const tablesQuery = `
@@ -155,7 +156,7 @@ async function getSchema() {
         `;
         const tables = await sqliteDb.all(tablesQuery);
 
-        let schema: any[] = [];
+  const schema: SchemaColumn[] = [];
         for (const table of tables) {
           const tableInfo = await sqliteDb.all(
             `PRAGMA table_info(${table.table_name})`
@@ -210,10 +211,11 @@ export async function createTableFromHeaders(
   return cols;
 }
 
+import { SqlRow } from './types';
 export async function bulkInsert(
   tableName: string,
   headers: string[],
-  rows: any[]
+  rows: SqlRow[]
 ) {
   const cols = headers
     .map((h) => h.replace(/[^a-zA-Z0-9_]/g, "_"))
@@ -239,7 +241,7 @@ export async function bulkInsert(
 }
 
 // Direct SQLite query helper for CSV datasets
-export async function sqliteQuery(sql: string, params: any[] = []) {
+export async function sqliteQuery(sql: string, params: unknown[] = []) {
   const db = await ensureSqlite();
   return db.all(sql, params);
 }

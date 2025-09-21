@@ -8,6 +8,13 @@ const genai = new ChatGoogleGenerativeAI({
   model: "gemini-1.5-flash-latest",
 });
 
+// Provide a lightweight helper to allow flexible option binding without conflicting with library typings
+type GenAIBindable = {
+  bind: (options: Record<string, unknown>) => ChatGoogleGenerativeAI;
+  invoke: ChatGoogleGenerativeAI["invoke"];
+};
+const genaiFlexible = genai as unknown as GenAIBindable;
+
 // Type for the function response
 interface SQLResponse {
   sql: string;
@@ -18,9 +25,10 @@ interface SQLResponse {
 /**
  * Generate SQL query from natural language question using Gemini
  */
+export interface SchemaColumn { table_name: string; column_name: string; data_type: string; is_nullable: string; [extra: string]: unknown }
 export async function generateSQLFromQuestion(
   question: string,
-  schema: any[],
+  schema: SchemaColumn[],
   dialect: string = "postgresql"
 ): Promise<SQLResponse> {
   try {
@@ -52,11 +60,11 @@ Rules:
 
     // Make the API call to Google Gemini
     // Using 'as any' as a workaround for potential type definition issues in older library versions.
-    const response = await genai
+    const response = await genaiFlexible
       .bind({
         temperature: 0.1,
         maxOutputTokens: 500,
-      } as any)
+      })
       .invoke([new SystemMessage(systemPrompt), new HumanMessage(question)]);
 
     const generatedSQL = response.content.toString().trim();
@@ -75,9 +83,9 @@ Rules:
       sql: cleanSQL,
       explanation: `Generated SQL for: "${question}"`,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error generating SQL:", error);
-    const msg = error?.message || "Unknown error";
+    const msg = error instanceof Error ? error.message : "Unknown error";
     // Simplified error handling for Gemini
     if (/api key/i.test(msg)) {
       return {
@@ -106,13 +114,13 @@ Rules:
 /**
  * Format database schema information for the AI prompt
  */
-function formatSchemaForPrompt(schema: any[]): string {
+function formatSchemaForPrompt(schema: SchemaColumn[]): string {
   if (!schema || schema.length === 0) {
     return "No schema information available";
   }
 
   // Group by table name
-  const tables: { [key: string]: any[] } = {};
+  const tables: Record<string, SchemaColumn[]> = {};
   schema.forEach((column) => {
     if (!tables[column.table_name]) {
       tables[column.table_name] = [];
@@ -139,7 +147,7 @@ function formatSchemaForPrompt(schema: any[]): string {
  * Validate if a generated SQL query is safe to execute
  */
 export function validateSQL(sql: string): { valid: boolean; error?: string } {
-  const lowerSQL = sql.toLowerCase();
+  // retain original for potential future enhancements (removed unused variable)
 
   // Check for dangerous operations
   const dangerousPatterns = [
@@ -194,17 +202,17 @@ export async function explainSQL(sql: string): Promise<string> {
       "You are a data analyst. Explain what the following SQL query does in simple, natural language. Keep it concise (1-2 sentences).";
 
     // Using 'as any' as a workaround for potential type definition issues in older library versions.
-    const response = await genai
+    const response = await genaiFlexible
       .bind({
         temperature: 0.3,
         maxOutputTokens: 100,
-      } as any)
+      })
       .invoke([new SystemMessage(systemPrompt), new HumanMessage(sql)]);
 
     return (
       response.content.toString().trim() || "Unable to generate explanation"
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error explaining SQL:", error);
     return "Failed to generate explanation";
   }
@@ -222,11 +230,11 @@ export async function generatePythonFromSQL(
 
     const userPrompt = `Table: ${datasetId}\nSQL:\n${sql}`;
 
-    const response = await genai
+    const response = await genaiFlexible
       .bind({
         temperature: 0.2,
         maxOutputTokens: 400,
-      } as any)
+      })
       .invoke([new SystemMessage(systemPrompt), new HumanMessage(userPrompt)]);
 
     let pythonCode = response.content.toString().trim();
@@ -240,7 +248,7 @@ export async function generatePythonFromSQL(
     }
 
     return pythonCode;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error generating Python script:", error);
     return ""; // Return empty string on failure
   }

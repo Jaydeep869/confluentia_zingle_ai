@@ -222,7 +222,7 @@ const HeroCodeBlock = () => (
         <span className="text-purple-400">FROM</span> orders
         <br />
         <span className="text-purple-400">WHERE</span> order_date {">"}{" "}
-        <span className="text-green-300">'2024-01-01'</span>
+              <span className="text-green-300">&#39;2024-01-01&#39;</span>
         <br />
         <span className="text-purple-400">GROUP BY</span> customer_name
         <br />

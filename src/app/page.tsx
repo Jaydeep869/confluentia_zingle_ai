@@ -18,12 +18,13 @@ export default function Home() {
 
   // New state for CSV Q&A
   const [csvQuestion, setCsvQuestion] = useState("");
+  interface CsvPreviewRow { [key: string]: unknown }
   const [csvAnswer, setCsvAnswer] = useState<{
     sql?: string;
     python?: string;
     explanation?: string;
     error?: string;
-    preview?: any[];
+    preview?: CsvPreviewRow[];
   } | null>(null);
   const [csvLoading, setCsvLoading] = useState(false);
 
@@ -89,8 +90,9 @@ export default function Home() {
         csvQuestion
       );
       setCsvAnswer(result);
-    } catch (e: any) {
-      setCsvAnswer({ error: e?.message || "Failed to ask dataset question" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to ask dataset question';
+      setCsvAnswer({ error: message });
     } finally {
       setCsvLoading(false);
     }

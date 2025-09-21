@@ -20,7 +20,9 @@ interface ResizablePanelGroupProps extends React.HTMLAttributes<HTMLDivElement> 
 }
 export function ResizablePanelGroup({ direction = 'horizontal', className, children, storageKey, ...rest }: ResizablePanelGroupProps){
   const panels = React.Children.toArray(children).filter(Boolean);
-  const initial = panels.filter(c => (c as any).type?.displayName === 'ResizablePanel').length;
+  const initial = panels.filter(el => (
+    React.isValidElement(el) && (el.type as { displayName?: string } | undefined)?.displayName === 'ResizablePanel'
+  )).length;
   const [sizes, setSizes] = React.useState(()=> {
     if (typeof window !== 'undefined' && storageKey) {
       const raw = localStorage.getItem('resize:'+storageKey);
@@ -63,11 +65,7 @@ interface ResizablePanelProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
 export function ResizablePanel({ children, className, defaultSize: _defaultSizeIgnored, ...rest}: ResizablePanelProps){
   const ctx = React.useContext(ResizableContext);
   const indexRef = React.useRef<number>(-1);
-  const selfIndex = React.useMemo(()=>{
-    if(!ctx) return -1;
-    let count = -1;
-    return (React.Children.toArray((ctx as any).children)?.filter(()=>true)?.length || 0, ++indexRef.current);
-  },[ctx]);
+  // Removed selfIndex calculation using any; index derived via DOM query below
   // simpler: derive index by counting previous panels in parent render tree
   // we will re-assign indices in parent while mapping
   // Instead: rely on effect assigning on first render

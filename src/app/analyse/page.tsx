@@ -1,9 +1,9 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { askCsvQuestion, uploadFile } from "@/lib/api";
-import { UploadResponse } from "@/lib/types";
+import { UploadResponse, CsvAskResponse } from "@/lib/types";
 import { redirect } from "next/navigation";
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { useToast } from "@/components/ui/toast";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,13 +17,7 @@ const CsvPage = () => {
     const [uploadResponse, setUploadResponse] = useState<UploadResponse | null>(null);
 
     const [csvQuestion, setCsvQuestion] = useState("");
-    const [csvAnswer, setCsvAnswer] = useState<{
-        sql?: string;
-        python?: string;
-        explanation?: string;
-        error?: string;
-        preview?: any[];
-    } | null>(null);
+    const [csvAnswer, setCsvAnswer] = useState<CsvAskResponse | { error: string } | null>(null);
     const [csvLoading, setCsvLoading] = useState(false);
     const [columnFilter, setColumnFilter] = useState("");
 
@@ -60,8 +54,9 @@ const CsvPage = () => {
         try {
             const result = await askCsvQuestion(uploadResponse.datasetId, csvQuestion);
             setCsvAnswer(result);
-        } catch (e: any) {
-            setCsvAnswer({ error: e?.message || "Failed to ask dataset question" });
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Failed to ask dataset question';
+            setCsvAnswer({ error: message });
         } finally {
             setCsvLoading(false);
         }
@@ -74,7 +69,7 @@ const CsvPage = () => {
     };
 
     // Helpers
-    const downloadSample = (rows: any[]) => {
+    const downloadSample = (rows: Record<string, unknown>[]) => {
         if(!rows || !rows.length) { notify('No sample rows'); return; }
         const headers = Object.keys(rows[0]);
         const csv = [headers.join(','), ...rows.map(r=> headers.map(h=> JSON.stringify(r[h] ?? '')).join(','))].join('\n');
@@ -99,7 +94,7 @@ const CsvPage = () => {
         return Math.round((filled/totalCells)*100);
     };
 
-    const formatCell = (v: any) => {
+    const formatCell = (v: unknown) => {
         if(v === null || v === undefined) return '—';
         if(typeof v === 'object') return JSON.stringify(v);
         const s = String(v);
@@ -228,26 +223,26 @@ const CsvPage = () => {
                             {csvAnswer && (
                                 <AuroraBackground className="p-4 rounded-xl border border-white/10 bg-black/20">
                                                                 <div className="space-y-4">
-                                                                        {csvAnswer.error && <div className="p-3 rounded-lg bg-red-500/10 text-red-200 border border-red-500/30 text-sm">{csvAnswer.error}</div>}
-                                                                        {csvAnswer.sql && (
+                                                                        {csvAnswer.error && (!('sql' in csvAnswer)) && <div className="p-3 rounded-lg bg-red-500/10 text-red-200 border border-red-500/30 text-sm">{csvAnswer.error}</div>}
+                                                                        {!csvAnswer.error && 'sql' in csvAnswer && csvAnswer.sql && (
                                                                               <Collapsible title="SQL" defaultOpen persistKey="dataset-sql">
                                                                                                                                                                 <div className="flex items-center justify-end mb-2">
                                                                                                                                                                     <button
-                                                                                                                                                                        onClick={()=>{navigator.clipboard.writeText(csvAnswer.sql||''); notify('SQL copied');}}
+                                                                                                                                                                           onClick={()=>{navigator.clipboard.writeText(csvAnswer.sql||''); notify('SQL copied');}}
                                                                                                                                                                         className="group relative text-xs px-3 py-1.5 rounded-md font-medium text-white bg-[linear-gradient(135deg,#1a1a1a,#111)] border border-white/15 shadow hover:border-white/30 focus:outline-none focus:ring-2 focus:ring-cyan-400/40 overflow-hidden"
                                                                                                                                                                     >
                                                                                                                                                                         <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-[radial-gradient(circle_at_30%_0%,rgba(255,255,255,0.12),transparent_60%)]" />
                                                                                                                                                                         <span className="relative">Copy</span>
                                                                                                                                                                     </button>
                                                                                                                                                                 </div>
-                                                                                <pre className="p-3 rounded-lg overflow-x-auto bg-black/60 text-green-300 border border-white/10 text-xs leading-relaxed">{csvAnswer.sql}</pre>
+                                        <pre className="p-3 rounded-lg overflow-x-auto bg-black/60 text-green-300 border border-white/10 text-xs leading-relaxed">{csvAnswer.sql}</pre>
                                                                             </Collapsible>
                                                                         )}
-                                                                        {csvAnswer.python && (
+                                    {!csvAnswer.error && 'python' in csvAnswer && csvAnswer.python && (
                                                                               <Collapsible title="Python Script" defaultOpen persistKey="dataset-python">
                                                                                                                                                                 <div className="flex items-center justify-end mb-2">
                                                                                                                                                                     <button
-                                                                                                                                                                        onClick={()=>{navigator.clipboard.writeText(csvAnswer.python||''); notify('Python script copied');}}
+                                                                                                                                                                           onClick={()=>{navigator.clipboard.writeText(csvAnswer.python||''); notify('Python script copied');}}
                                                                                                                                                                         className="group relative text-xs px-3 py-1.5 rounded-md font-medium text-white bg-[linear-gradient(135deg,#1a1a1a,#111)] border border-white/15 shadow hover:border-white/30 focus:outline-none focus:ring-2 focus:ring-cyan-400/40 overflow-hidden"
                                                                                                                                                                     >
                                                                                                                                                                         <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-[radial-gradient(circle_at_30%_0%,rgba(255,255,255,0.12),transparent_60%)]" />
@@ -257,7 +252,7 @@ const CsvPage = () => {
                                                                                 <pre className="p-3 rounded-lg overflow-x-auto bg-black/60 text-zinc-200 border border-white/10 text-xs leading-relaxed">{csvAnswer.python}</pre>
                                                                             </Collapsible>
                                                                         )}
-                                                                        {csvAnswer.preview && csvAnswer.preview.length>0 && (
+                                                                        {!csvAnswer.error && 'preview' in csvAnswer && csvAnswer.preview && csvAnswer.preview.length>0 && (
                                                                               <Collapsible title={`Preview (${csvAnswer.preview.length} rows)`} defaultOpen={false} persistKey="dataset-preview">
                                                                                 <div className="overflow-x-auto">
                                                                                     <table className="min-w-full bg-black/20 border border-white/10 rounded-md text-xs">
@@ -267,7 +262,7 @@ const CsvPage = () => {
                                                                                             </tr>
                                                                                         </thead>
                                                                                         <tbody>
-                                                                                            {csvAnswer.preview.map((row, idx)=>(
+                                                                                            {csvAnswer.preview.map((row: Record<string, unknown>, idx: number)=>(
                                                                                                 <tr key={idx}>{Object.values(row).map((val,j)=>(<td key={j} className="px-3 py-2 border-b border-white/10 text-zinc-200">{typeof val==='object'? JSON.stringify(val): String(val)}</td>))}</tr>
                                                                                             ))}
                                                                                         </tbody>
@@ -290,7 +285,7 @@ const CsvPage = () => {
 export default CsvPage;
 
 // Small stat card component
-const StatCard = ({label, value, suffix}:{label:string; value:any; suffix?:string}) => (
+const StatCard = ({label, value, suffix}:{label:string; value:number|string; suffix?:string}) => (
     <div className="relative overflow-hidden rounded-lg border border-white/10 bg-gradient-to-br from-zinc-900/70 to-zinc-800/40 p-4">
         <p className="text-[11px] uppercase tracking-wide text-zinc-400 mb-1">{label}</p>
         <p className="text-2xl font-semibold text-white">{value}{suffix || ''}</p>

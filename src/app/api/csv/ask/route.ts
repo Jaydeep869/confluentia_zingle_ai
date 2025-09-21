@@ -19,20 +19,23 @@ export async function POST(req: NextRequest) {
 
     // Ensure SQLite is available and build a targeted schema for the dataset table
     await ensureSqlite();
-    let schema = await getSchema();
-    if (Array.isArray(schema)) {
-      schema = schema.filter((c: any) => c.table_name === datasetId);
+    type SchemaColumn = { table_name: string; column_name: string; data_type: string; is_nullable: string }
+  const schemaUnknown: unknown = await getSchema();
+    let schema: SchemaColumn[] = Array.isArray(schemaUnknown) ? (schemaUnknown as SchemaColumn[]) : [];
+    if (schema.length) {
+      const narrowed = schema.filter((c) => c.table_name === datasetId);
+      schema = narrowed;
       // If schema is empty (new table), try PRAGMA to fetch columns
-      if (!schema.length) {
+      if (!narrowed.length) {
         try {
-          const cols = await sqliteQuery(`PRAGMA table_info(${datasetId})`);
-          schema = cols.map((c: any) => ({
+          const cols: Array<{ name: string; type: string; notnull: number }> = await sqliteQuery(`PRAGMA table_info(${datasetId})`);
+          schema = cols.map((c) => ({
             table_name: datasetId,
             column_name: c.name,
             data_type: c.type || "TEXT",
             is_nullable: c.notnull === 0 ? "YES" : "NO",
           }));
-        } catch {}
+        } catch {/* ignore pragma failure */}
       }
     }
 
@@ -54,10 +57,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Try execution
-    let rows: any[] = [];
+  let rows: Array<Record<string, unknown>> = [];
     try {
       rows = await sqliteQuery(gen.sql);
-    } catch (e: any) {
+  } catch (e: unknown) {
       // Ignore execution failure; still return SQL and Python
     }
 
@@ -67,7 +70,7 @@ export async function POST(req: NextRequest) {
       if (process.env.GOOGLE_API_KEY) {
         python = await generatePythonFromSQL(datasetId, gen.sql);
       }
-    } catch (e) {
+  } catch {
       // ignored
     }
 
@@ -94,9 +97,10 @@ export async function POST(req: NextRequest) {
       explanation: gen.explanation || (await explainSQL(gen.sql)),
       preview: rows.slice(0, 5),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'CSV ask failed';
     return Response.json(
-      { error: err?.message || "CSV ask failed" },
+      { error: message },
       { status: 500 }
     );
   }

@@ -1,6 +1,6 @@
 // Shared types used by client and server
 
-export type SqlRow = Record<string, any>;
+export type SqlRow = Record<string, unknown>;
 
 export interface SQLResponse {
   question: string;
@@ -40,4 +40,5 @@ export interface CsvAskResponse {
   python?: string;
   explanation?: string;
   error?: string;
+  preview?: SqlRow[];
 }

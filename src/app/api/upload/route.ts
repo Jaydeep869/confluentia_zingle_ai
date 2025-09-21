@@ -1,6 +1,6 @@
 // /src/app/api/upload/route.ts
 import { NextRequest } from "next/server";
-import { UploadColumnSummary, UploadResponse } from "@/lib/types";
+import { UploadColumnSummary, UploadResponse, SqlRow } from "@/lib/types";
 import { createTableFromHeaders, bulkInsert } from "@/lib/db";
 
 function detectType(val: string): string {
@@ -26,9 +26,9 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Empty CSV" }, { status: 400 });
     }
     const headers = lines[0].split(",").map((h) => h.trim());
-    const rows = lines.slice(1).map((line) => {
+    const rows: SqlRow[] = lines.slice(1).map((line) => {
       const parts = line.split(",");
-      const obj: Record<string, any> = {};
+      const obj: SqlRow = {};
       headers.forEach((h, i) => (obj[h] = parts[i] ?? ""));
       return obj;
     });
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     const sanitizedHeaders = await createTableFromHeaders(tableName, headers);
     // Normalize rows to sanitized headers
     const normalizedRows = rows.map((r) => {
-      const o: Record<string, any> = {};
+      const o: SqlRow = {};
       sanitizedHeaders.forEach((sh, idx) => {
         const original = headers[idx];
         o[sh] = r[original] ?? "";
@@ -90,9 +90,10 @@ export async function POST(req: NextRequest) {
       tableName,
     };
     return Response.json(resp);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Upload failed';
     return Response.json(
-      { error: err?.message || "Upload failed" },
+      { error: message },
       { status: 500 }
     );
   }

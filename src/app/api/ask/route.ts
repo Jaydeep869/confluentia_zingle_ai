@@ -5,7 +5,7 @@ import {
   getSchema as getDbSchema,
   query as dbQuery,
 } from "@/lib/db";
-import { generateSQLFromQuestion, validateSQL, explainSQL } from "@/lib/llm";
+import { generateSQLFromQuestion, validateSQL, explainSQL, SchemaColumn } from "@/lib/llm";
 
 let dbInitialized = false;
 async function ensureDb() {
@@ -22,8 +22,9 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Question is required" }, { status: 400 });
     }
 
-    const schema = await getDbSchema();
-    const gen = await generateSQLFromQuestion(question, schema, "postgresql");
+  const schemaRaw = await getDbSchema();
+  const schema: SchemaColumn[] = Array.isArray(schemaRaw) ? (schemaRaw as SchemaColumn[]) : [];
+  const gen = await generateSQLFromQuestion(question, schema, "postgresql");
     if (gen.error || !gen.sql) {
       return Response.json(
         {
@@ -73,9 +74,10 @@ export async function POST(req: NextRequest) {
       rowCount: rows.length,
       timestamp: new Date().toISOString(),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Internal error';
     return Response.json(
-      { error: err?.message || "Internal error" },
+      { error: message },
       { status: 500 }
     );
   }
