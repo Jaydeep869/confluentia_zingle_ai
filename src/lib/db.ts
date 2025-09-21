@@ -8,7 +8,9 @@ import { SqlRow } from "./types";
 // Use a configurable SQLITE_FILE env var or fall back to /tmp in prod, local file in dev.
 export const SQLITE_FILE_PATH =
   process.env.SQLITE_FILE ||
-  (process.env.NODE_ENV === "production" ? "/tmp/ai_copilot.db" : "./ai_copilot.db");
+  (process.env.NODE_ENV === "production"
+    ? "/tmp/ai_copilot.db"
+    : "./ai_copilot.db");
 
 // ---------------------
 // PostgreSQL (Neon) setup
@@ -171,9 +173,7 @@ export async function getSchema(): Promise<SchemaColumn[]> {
 
     const schema: SchemaColumn[] = [];
     for (const table of tables) {
-      const cols = await db.all(
-        `PRAGMA table_info(${table.table_name})`
-      );
+      const cols = await db.all(`PRAGMA table_info(${table.table_name})`);
       for (const col of cols) {
         schema.push({
           table_name: table.table_name,
@@ -215,9 +215,9 @@ export async function bulkInsert(
     .map((h) => (h ? h : "col"));
   const db = await ensureSqlite();
   const stmt = await db.prepare(
-    `INSERT INTO ${tableName} (${cols.map((c) => `"${c}"`).join(",")}) VALUES (${cols
-      .map(() => "?")
-      .join(",")})`
+    `INSERT INTO ${tableName} (${cols
+      .map((c) => `"${c}"`)
+      .join(",")}) VALUES (${cols.map(() => "?").join(",")})`
   );
   try {
     await db.exec("BEGIN");

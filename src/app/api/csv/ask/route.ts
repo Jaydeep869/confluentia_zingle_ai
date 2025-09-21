@@ -1,6 +1,11 @@
 // /src/app/api/ask-csv/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getSchema, sqliteQuery, ensureSqlite, SQLITE_FILE_PATH } from "@/lib/db";
+import {
+  getSchema,
+  sqliteQuery,
+  ensureSqlite,
+  SQLITE_FILE_PATH,
+} from "@/lib/db";
 import {
   generateSQLFromQuestion,
   validateSQL,
@@ -86,7 +91,11 @@ export async function POST(req: NextRequest) {
       rows = await sqliteQuery(gen.sql);
     } catch (err) {
       return NextResponse.json(
-        { error: "SQL execution failed: " + (err instanceof Error ? err.message : err) },
+        {
+          error:
+            "SQL execution failed: " +
+            (err instanceof Error ? err.message : err),
+        },
         { status: 200 }
       );
     }
@@ -107,7 +116,10 @@ export async function POST(req: NextRequest) {
         "import sqlite3",
         "import pandas as pd",
         "",
-        `conn = sqlite3.connect('${SQLITE_FILE_PATH.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}')`,
+        `conn = sqlite3.connect('${SQLITE_FILE_PATH.replace(
+          /\\/g,
+          "\\\\"
+        ).replace(/'/g, "\\'")}')`,
         `sql = """${gen.sql.replace(/"""/g, '"""')}"""`,
         "df = pd.read_sql_query(sql, conn)",
         "print(df.head(10))",
