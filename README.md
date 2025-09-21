@@ -166,8 +166,9 @@ Response (subset)
   "preview": [{ "country": "US", "avg_amount": 123.45 }],
   "explanation": "..."
 }
+```
 
-##DEMO
+## DEMO
 
 
 
