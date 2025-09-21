@@ -7,19 +7,20 @@ import {
   generatePythonFromSQL,
 } from "@/lib/llm";
 
+const FIXED_TABLE = "uploaded_csv";
+
 interface CsvAskRequestBody {
-  datasetId: string;
   question: string;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body: CsvAskRequestBody = await req.json();
-    const { datasetId, question } = body;
+    const { question } = body;
 
-    if (!datasetId || !question) {
+    if (!question) {
       return NextResponse.json(
-        { error: "datasetId and question are required" },
+        { error: "Question is required" },
         { status: 400 }
       );
     }
@@ -39,22 +40,25 @@ export async function POST(req: NextRequest) {
       ? (schemaUnknown as SchemaColumn[])
       : [];
 
-    // Filter schema for this dataset
-    schema = schema.filter((c) => c.table_name === datasetId);
+    // Filter schema for fixed table
+    schema = schema.filter((c) => c.table_name === FIXED_TABLE);
 
     // If schema empty, fallback to PRAGMA
     if (!schema.length) {
       try {
         const cols: Array<{ name: string; type: string; notnull: number }> =
-          await sqliteQuery(`PRAGMA table_info(${datasetId})`);
+          await sqliteQuery(`PRAGMA table_info(${FIXED_TABLE})`);
         schema = cols.map((c) => ({
-          table_name: datasetId,
+          table_name: FIXED_TABLE,
           column_name: c.name,
           data_type: c.type || "TEXT",
           is_nullable: c.notnull === 0 ? "YES" : "NO",
         }));
       } catch {
-        // ignore pragma failure
+        return NextResponse.json(
+          { error: "No dataset found. Please upload a CSV first." },
+          { status: 400 }
+        );
       }
     }
 
@@ -88,7 +92,7 @@ export async function POST(req: NextRequest) {
     let python = "";
     try {
       if (process.env.GOOGLE_API_KEY) {
-        python = await generatePythonFromSQL(datasetId, gen.sql);
+        python = await generatePythonFromSQL(FIXED_TABLE, gen.sql);
       }
     } catch {
       // ignored
@@ -109,8 +113,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      datasetId,
-      tableName: datasetId,
+      tableName: FIXED_TABLE,
       question,
       sql: gen.sql,
       python,
