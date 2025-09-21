@@ -8,7 +8,9 @@ import Ascii from "./Ascii";
 
 export default function HeroSectionOne() {
   const [showChat, setShowChat] = useState(false);
-  const [messages, setMessages] = useState<{ sender: "user" | "ai"; text: string }[]>([]);
+  const [messages, setMessages] = useState<
+    { sender: "user" | "ai"; text: string }[]
+  >([]);
   const [input, setInput] = useState("");
   const router = useRouter();
   const mainContentRef = useRef<HTMLDivElement>(null);
@@ -57,19 +59,21 @@ export default function HeroSectionOne() {
 
       <div className="px-4 py-10 md:py-20 w-full flex flex-col items-center">
         <h1 className="relative z-10 mx-auto max-w-4xl text-center text-2xl font-bold text-white md:text-4xl lg:text-7xl dark:text-slate-300">
-          {"AI Copilot for Your Data"
-            .split(" ")
-            .map((word, index) => (
-              <motion.span
-                key={index}
-                initial={{ opacity: 0, filter: "blur(4px)", y: 10 }}
-                animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1, ease: "easeInOut" }}
-                className="mr-2 inline-block"
-              >
-                {word}
-              </motion.span>
-            ))}
+          {"AI Copilot for Your Data".split(" ").map((word, index) => (
+            <motion.span
+              key={index}
+              initial={{ opacity: 0, filter: "blur(4px)", y: 10 }}
+              animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+              transition={{
+                duration: 0.3,
+                delay: index * 0.1,
+                ease: "easeInOut",
+              }}
+              className="mr-2 inline-block"
+            >
+              {word}
+            </motion.span>
+          ))}
         </h1>
 
         {!showChat ? (
@@ -80,7 +84,9 @@ export default function HeroSectionOne() {
               transition={{ duration: 0.3, delay: 0.8 }}
               className="relative z-10 mx-auto max-w-xl py-4 text-center text-lg font-normal text-[#F8FAFC] dark:text-neutral-400"
             >
-              Translate natural language questions into SQL, analyze datasets instantly, and get the insights you need. Privacy-friendly and effortless.
+              Translate natural language questions into SQL, analyze datasets
+              instantly, and get the insights you need. Privacy-friendly and
+              effortless.
             </motion.p>
 
             <motion.div
@@ -120,6 +126,14 @@ export default function HeroSectionOne() {
             transition={{ duration: 0.5 }}
             className="w-full max-w-xl flex flex-col items-center mt-10"
           >
+            <div className="w-full flex justify-end mb-3">
+              <button
+                onClick={() => router.push("/analyse")}
+                className="text-xs px-3 py-1.5 rounded-md bg-black/60 border border-white/15 hover:bg-black/70 text-white"
+              >
+                Go to Analyze →
+              </button>
+            </div>
             <div className="w-full h-80 overflow-y-auto border rounded-2xl p-4 mb-4 backdrop-blur-lg shadow-inner">
               {messages.length === 0 ? (
                 <p className="text-zinc-500 dark:text-zinc-400 text-center">
@@ -132,13 +146,16 @@ export default function HeroSectionOne() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
-                    className={`mb-4 flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+                    className={`mb-4 flex ${
+                      msg.sender === "user" ? "justify-end" : "justify-start"
+                    }`}
                   >
                     <div
                       className={`max-w-[80%] px-4 py-3 rounded-2xl shadow-md text-sm sm:text-base leading-relaxed
-                        ${msg.sender === "user"
-                          ? " bg-indigo-600 text-white"
-                          : "bg-gradient-to-r from-neutral-800 to-green-900 text-zinc-100 border border-white/10"
+                        ${
+                          msg.sender === "user"
+                            ? " bg-indigo-600 text-white"
+                            : "bg-gradient-to-r from-neutral-800 to-green-900 text-zinc-100 border border-white/10"
                         }`}
                     >
                       {msg.sender !== "user" && msg.text.includes("```") ? (
