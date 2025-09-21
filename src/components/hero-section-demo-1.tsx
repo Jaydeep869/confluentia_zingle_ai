@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { SQLResponse, UploadResponse } from "@/lib/types";
 import { askQuestion } from "@/lib/api";
-import { redirect, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
 import Ascii from "./Ascii";
 
@@ -111,8 +111,12 @@ export default function HeroSectionOne() {
               >
                 Ask Question
               </button>
-              <button onClick={() => redirect("/analyse")} className="w-60 transform rounded-lg border border-gray-300 bg-white px-6 py-2 font-medium text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-gray-100 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-gray-900">
-                Analyse Data
+              <button
+                onClick={() => router.push("/analyse")}
+                className="w-60 relative group overflow-hidden rounded-lg px-6 py-2 font-medium text-white transition-all duration-300 border border-white/15 bg-[linear-gradient(135deg,#1a1a1a,#101010)] hover:border-white/30 hover:-translate-y-0.5 shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_4px_10px_-2px_rgba(0,0,0,0.6),0_8px_24px_-4px_rgba(0,0,0,0.5)]"
+              >
+                <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-[radial-gradient(circle_at_30%_0%,rgba(255,255,255,0.15),transparent_65%)]" />
+                <span className="relative">Analyse Data</span>
               </button>
             </motion.div>
           </>
@@ -186,8 +190,17 @@ export default function HeroSectionOne() {
               </button>
             </div>
 
-            <button onClick={() => redirect("/analyse")} className="w-60 transform rounded-lg border border-gray-300 bg-white px-6 py-2 font-medium text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-gray-100 dark:border-gray-700 dark:bg-black dark:text-white dark:hover:bg-gray-900">
-              Analyse Data
+            <button
+              onClick={() => router.push("/analyse")}
+              className="mt-4 w-60 relative group overflow-hidden rounded-lg px-6 py-2 font-medium text-white transition-all duration-300 border border-white/15 bg-[linear-gradient(135deg,#1a1a1a,#101010)] hover:border-white/30 hover:-translate-y-0.5 shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_4px_10px_-2px_rgba(0,0,0,0.6),0_8px_24px_-4px_rgba(0,0,0,0.5)]"
+            >
+              <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-[radial-gradient(circle_at_70%_0%,rgba(255,255,255,0.15),transparent_65%)]" />
+              <span className="relative flex items-center justify-center gap-2">
+                <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+                </svg>
+                Analyse Data
+              </span>
             </button>
           </motion.div>
         )}

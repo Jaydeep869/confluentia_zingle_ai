@@ -1,5 +1,33 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Database Configuration (Neon.tech + SQLite fallback)
+
+Set an environment variable `DB_URL` with your Neon connection string. Example:
+
+```
+DB_URL=postgresql://<user>:<password>@<host>/<database>?sslmode=require
+```
+
+Common Neon format (copy from Neon dashboard):
+
+```
+postgresql://<user>:<password>@<project-name>-<hash>.eu-central-1.aws.neon.tech/<database>?sslmode=require
+```
+
+If `DB_URL` is absent or Neon is unreachable, the app will automatically fall back to a local SQLite database stored in `ai_copilot.db` for demo & CSV ingestion.
+
+### Environment setup
+
+Create a `.env.local` file in the project root:
+
+```
+DB_URL=postgresql://user:password@your-neon-host/dbname?sslmode=require
+``` 
+
+(Optionally add any other API keys your LLM integration needs.) Restart the dev server after changes.
+
+---
+
 ## Getting Started
 
 First, run the development server:

@@ -152,8 +152,18 @@ export function validateSQL(sql: string): { valid: boolean; error?: string } {
     /create\s+table/i,
     /grant\s+/i,
     /revoke\s+/i,
-    /;\s*$/m, // Multiple statements
   ];
+
+  // Detect multiple statements (semicolon not at end or more than one)
+  const cleaned = sql.trim();
+  const semiCount = (cleaned.match(/;/g) || []).length;
+  if (semiCount > 1 || (semiCount === 1 && !/;\s*$/.test(cleaned))) {
+    return { valid: false, error: "Multiple SQL statements are not allowed" };
+  }
+
+  // Strip a single safe trailing semicolon for subsequent checks
+  sql = cleaned.replace(/;\s*$/, "");
+  const lowerSQL2 = sql.toLowerCase();
 
   for (const pattern of dangerousPatterns) {
     if (pattern.test(sql)) {
@@ -165,7 +175,7 @@ export function validateSQL(sql: string): { valid: boolean; error?: string } {
   }
 
   // Ensure it's a SELECT query for safety
-  if (!lowerSQL.trim().startsWith("select")) {
+  if (!lowerSQL2.trim().startsWith("select")) {
     return {
       valid: false,
       error: "Only SELECT queries are allowed for safety",
