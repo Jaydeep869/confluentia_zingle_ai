@@ -166,7 +166,13 @@ Response (subset)
   "preview": [{ "country": "US", "avg_amount": 123.45 }],
   "explanation": "..."
 }
-```
+
+##DEMO
+
+
+
+https://github.com/user-attachments/assets/f7d183fb-a0d5-4116-9790-2e5ab60e2cc5
+
 
 ## Architecture map
 
